@@ -19,7 +19,7 @@ except Exception: print("bilinmiyor")' 2>/dev/null || echo bilinmiyor)"
 {
 echo "=== PROJE DURUMU — otomatik yuklendi (SessionStart hook) ==="
 echo
-son="$(ls -1 "${DEVIR_DIZINI}"/*.md 2>/dev/null | sort | tail -1)"
+son="$(ls -1t "${DEVIR_DIZINI}"/*.md 2>/dev/null | head -1)"
 if [ -n "${son}" ]; then
   echo "## Son oturum devri: $(basename "${son}")"; echo
   sed -n '1,32p' "${son}"
