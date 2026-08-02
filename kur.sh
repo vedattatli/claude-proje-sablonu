@@ -87,6 +87,16 @@ EOF
   echo "✔ .gitignore"
 fi
 
+# Hook'un urettigi yerel izler — .gitignore zaten varsa da EKLENIR.
+# pii-uyari.log yakalanan degeri maskeli tutar ama yine de repoya girmemeli;
+# .push-basarisiz makineye ozgudur, baska klonda anlami yoktur.
+for satir in ".claude/pii-uyari.log" ".claude/.push-basarisiz"; do
+  if ! grep -qxF "${satir}" "${HEDEF}/.gitignore" 2>/dev/null; then
+    printf '%s\n' "${satir}" >> "${HEDEF}/.gitignore"
+    echo "✔ .gitignore += ${satir}"
+  fi
+done
+
 # --- 5) git -----------------------------------------------------------------
 if [ ! -d "${HEDEF}/.git" ]; then
   git -C "${HEDEF}" init -q -b main

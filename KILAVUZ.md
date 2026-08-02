@@ -93,8 +93,13 @@ Ayrıca `/tmp/claude-oturum-<id>.damga` bırakır — `Stop` bunu kullanarak
 ⚠ **`Stop` her turun sonunda tetiklenir** — oturum sonunda değil. Tasarım buna göre:
 
 **a) Otomatik commit + push (her tur, sessiz)**
-Çalışma hiçbir zaman bir turdan fazla commit'siz kalmaz. SSD ölse, en fazla bir
-turluk iş kaybolur.
+Çalışma hiçbir zaman bir turdan fazla commit'siz kalmaz.
+
+⚠ **"SSD ölse en fazla bir turluk iş kaybolur" yalnızca push BAŞARILIYSA doğrudur.**
+Commit yereldir; koruma push'tan gelir. Bu yüzden push başarısız olduğunda hook
+`.claude/.push-basarisiz` dosyası bırakır ve `SessionStart` bunu en üstte basar.
+Sebep: hook'un `systemMessage` kanalının modele **ulaşmadığı** ölçüldü (02.08.2026) —
+yani ekrana yazmak yetmiyor, arıza **diske** yazılmalı.
 
 Riskli dosya (`.env`, `*.pem`, `id_rsa`, `credentials`…) varsa **commit durdurulur**
 ve uyarı basılır — ikinci savunma hattı.
@@ -102,6 +107,10 @@ ve uyarı basılır — ikinci savunma hattı.
 **b) Devir dosyası zorlaması (oturumda EN FAZLA BİR KEZ)**
 `DEVIR_ESIGI` (varsayılan 3) commit birikmiş **ve** bu oturumda devir dosyası
 yazılmamışsa, `decision: "block"` döner ve Claude'a yazdırır.
+
+⚠ Sayım **`oto:` commit'lerini hariç tutar.** Aksi halde hook kendi ürettiği
+commit'leri sayar ve kendi bloklama şartını kendisi imal ederdi — dosyaya dokunan
+3 tur, işin ağırlığından bağımsız olarak eşiği doldururdu. (02.08.2026 denetimi.)
 
 > **Kaçış valfi:** bir kez engelledikten sonra o oturumda **bir daha asla**
 > engellemez. İş akışı kilitlenemez.
@@ -223,20 +232,43 @@ kayıp riski bir tur, geçmiş okunabilir kalıyor.
 
 # 9 · Bu sistem neyi garanti eder, neyi etmez
 
-✅ **Eder**
-- Yeni oturum durumu bilerek başlar
-- Çalışma bir turdan fazla commit'siz kalmaz
-- Uzak depoya otomatik gider (remote varsa)
-- Sıkıştırma sonrası kurallar geri gelir
-- Devir dosyası unutulursa hatırlatılır
+✅ **Eder — canlı doğrulandı (02.08.2026, PaxDoc oturumu)**
+- Yeni oturum durumu bilerek başlar *(SessionStart bloğu bağlama düştü)*
+- Çalışma bir turdan fazla commit'siz kalmaz *(`oto:` commit'leri gözlendi)*
+- Uzak depoya otomatik gider *(remote'a karşı doğrulandı; başarısızlık artık iz bırakır)*
+- Devir dosyası unutulursa hatırlatılır *(⚠ bloklama yolu yalnız birim testinde görüldü)*
+- Riskli dosya adları yazılmadan engellenir *(30 testlik paket + canlı deneme)*
+
+⚠ **Henüz DOĞRULANMADI — betiği sağlam, tetiklendiği görülmedi**
+- **Sıkıştırma sonrası kuralların geri gelmesi.** `PostCompact` bugüne kadar bir kez
+  bile tetiklenirken gözlenmedi; koşul (bağlam sıkışması) hiç oluşmadı. Daha önce bu
+  satır ✅ listesindeydi — **doğrulanmamış bir şey garanti olarak yazılmıştı.**
+- **`PreCompact` anlık görüntüsü** — aynı sebeple gözlenmedi.
 
 ❌ **Etmez**
 - İçeriğin *doğru* yazıldığını garanti etmez — sadece yazılmasını sağlar
+- **PII'yi içeriğinden tanıyıp engellemez.** Dosya *adı* engellenir; *içerik* yalnızca
+  uyarı üretir (kural metinlerindeki örnek numaralar yanlış pozitif yapardı). Yani
+  masum adlı bir dosyaya gerçek PII yazılabilir — sistem işaretler, durdurmaz
 - Remote yoksa bulut yedeği yoktur; `gh repo create --private` şart
-- Claude Code dışındaki değişiklikleri izlemez
+- Claude Code dışındaki değişiklikleri izlemez — kabuktan yapılan her şey görünmez değil
+  ama yalnızca `Bash` aracı üzerinden geçenler kapsanır
 
 ---
 
-*Bu sistem PaxDoc Navigator projesinde geliştirildi ve orada çalışır durumda.
-Dört senaryonun tamamı test edildi: engelleme, kaçış valfi, devir-varsa-geçir,
-otomatik commit.*
+*Bu sistem PaxDoc Navigator projesinde geliştirildi.*
+
+**Doğrulama durumu — 02.08.2026 denetimi sonrası, dürüst hali:**
+
+| Hook | Durum |
+|---|---|
+| `SessionStart` | ✅ Canlı gözlendi — durum bloğu bağlama düştü |
+| `PreToolUse` (PII) | ✅ Canlı gözlendi — engelleme ve izin verme, 30 testlik paket |
+| `Stop` | ✅ Canlı gözlendi — `oto:` commit'ler oluştu, push remote'a karşı doğrulandı. ⚠ Bloklama yolu yalnız birim testinde |
+| `PreCompact` | ❌ Tetiklendiği **görülmedi** |
+| `PostCompact` | ❌ Tetiklendiği **görülmedi** |
+
+⚠ Bu bölümün önceki hali *"orada çalışır durumda, dört senaryonun tamamı test edildi"*
+diyordu. Yazıldığı anda **hiçbir hook canlı doğrulanmamıştı** — birim testleri geçmişti,
+o kadar. Denetim ayrıca testten geçerken açık kalan iki güvenlik deliği buldu.
+Ders şablonun kendisine yazılıyor: **"test geçti" ile "çalışıyor" aynı cümle değildir.**

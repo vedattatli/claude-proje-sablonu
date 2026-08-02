@@ -19,6 +19,31 @@ except Exception: print("bilinmiyor")' 2>/dev/null || echo bilinmiyor)"
 {
 echo "=== PROJE DURUMU — otomatik yuklendi (SessionStart hook) ==="
 echo
+
+# --- 0) SESSIZ ARIZALAR — en uste, cunku gomulurse fark edilmez ------------
+# 02.08.2026 denetimi: Stop hook'unun systemMessage kanali modele ulasmiyor.
+# Bu yuzden push arizasi ve PII uyarilari DISKTEN okunup buraya basilir.
+if [ -f .claude/.push-basarisiz ]; then
+  echo "## 🔴 UYARI — SON PUSH BASARISIZ OLDU"
+  echo
+  sed 's/^/    /' .claude/.push-basarisiz
+  echo
+  echo "    Calisma yalnizca bu diskte. Once bunu coz:  git push"
+  echo "    Duzelince bu uyari kendiliginden kalkar."
+  echo
+fi
+
+if [ -f .claude/pii-uyari.log ]; then
+  adet_uyari="$(wc -l < .claude/pii-uyari.log 2>/dev/null || echo 0)"
+  if [ "${adet_uyari}" -gt 0 ] 2>/dev/null; then
+    echo "## ⚠ PII icerik uyarisi: ${adet_uyari} kayit (.claude/pii-uyari.log)"
+    echo "   Bunlar ENGELLENMEDI — yalnizca isaretlendi. Son 3:"
+    tail -3 .claude/pii-uyari.log | sed 's/^/    /'
+    echo "   Ornek numaraysa sorun yok. Gercek veriyse kirmizi cizgi ihlali."
+    echo
+  fi
+fi
+
 son="$(ls -1t "${DEVIR_DIZINI}"/*.md 2>/dev/null | head -1)"
 if [ -n "${son}" ]; then
   echo "## Son oturum devri: $(basename "${son}")"; echo

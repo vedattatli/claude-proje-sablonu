@@ -35,8 +35,32 @@ if [ "${OTO_COMMIT}" = "1" ] && [ -n "$(git status --porcelain 2>/dev/null)" ]; 
   git add -A >/dev/null 2>&1
   git commit -q -m "oto: calisma kaydi $(date '+%Y-%m-%d %H:%M')" \
     -m "Stop hook tarafindan otomatik olusturuldu." >/dev/null 2>&1 && mesaj="✔ otomatik commit"
+  # --- PUSH + BASARISIZLIK IZI ---------------------------------------------
+  # 02.08.2026 denetimi: bu hook'un systemMessage kanali modele ULASMIYOR.
+  # "(push BASARISIZ)" yazilsa da kimse gormuyor; calisma sessizce yalnizca
+  # yerel diskte kaliyor — hook'un onlemek icin var oldugu senaryonun ta kendisi.
+  # Cozum: arizayi DISKE yaz, SessionStart en ustte bassin.
+  isaret="${P}/.claude/.push-basarisiz"
   if [ "${OTO_PUSH}" = "1" ] && git remote get-url origin >/dev/null 2>&1; then
-    git push -q >/dev/null 2>&1 && mesaj="${mesaj} + push" || mesaj="${mesaj} (push BASARISIZ)"
+    if git push -q >/dev/null 2>&1; then
+      mesaj="${mesaj} + push"
+      rm -f "${isaret}" 2>/dev/null || true
+    else
+      mesaj="${mesaj} (push BASARISIZ)"
+      mkdir -p "${P}/.claude" 2>/dev/null || true
+      {
+        echo "Zaman : $(date '+%Y-%m-%d %H:%M')"
+        echo "Dal   : $(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo '?')"
+        echo "Uzak  : $(git remote get-url origin 2>/dev/null || echo '?')"
+        if git rev-parse '@{u}' >/dev/null 2>&1; then
+          echo "Push'lanmamis commit: $(git log '@{u}..HEAD' --oneline 2>/dev/null | wc -l)"
+        else
+          # Upstream hic kurulmamis olabilir; "0" yazmak yaniltici olurdu.
+          echo "Push'lanmamis commit: BILINMIYOR (upstream ayarli degil)"
+          echo "Yerel commit sayisi : $(git log --oneline 2>/dev/null | wc -l)"
+        fi
+      } > "${isaret}" 2>/dev/null || true
+    fi
   fi
 fi
 
@@ -47,7 +71,13 @@ if [ -f "${blok}" ]; then
 fi
 
 if [ -f "${damga}" ]; then
-  adet="$(git log --oneline --since="$(date -r "${damga}" '+%Y-%m-%d %H:%M:%S')" 2>/dev/null | wc -l)"
+  # ⚠ Sayim "oto:" commit'lerini HARIC tutar. Aksi halde hook kendi urettigi
+  #   commit'leri sayar ve kendi bloklama sartini kendisi imal eder — dosyaya
+  #   dokunan 3 tur, isin agirligindan bagimsiz olarak esigi doldurur.
+  #   (02.08.2026 denetim bulgusu.)
+  adet="$(git log --oneline --since="$(date -r "${damga}" '+%Y-%m-%d %H:%M:%S')" 2>/dev/null \
+          | grep -cv 'oto: calisma kaydi' || true)"
+  [ -z "${adet}" ] && adet=0
   yeni="$(find "${DEVIR_DIZINI}" -name '*.md' -newer "${damga}" 2>/dev/null | head -1)"
   if [ "${adet}" -ge "${DEVIR_ESIGI}" ] && [ -z "${yeni}" ]; then
     : > "${blok}"
